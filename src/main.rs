@@ -30,25 +30,26 @@ struct Config{
 
 impl Config {
     fn new(args: &[String]) -> Result<Config,  Box<dyn Error>> {
-		let path = env::current_dir()?;
-		println!("The current directory is {}", path.display());
+		let mut path = env::current_dir()?;
+		println!("Test {}", args[0].as_str());
 		let mut alt_mode = false;
-		let exceptions : Vec<String> = vec!["txt".to_string(), "xls".to_string(), "obs".to_string(), "doc".to_string()];
+		let mut exceptions : Vec<String> = vec!["txt".into(), "xls".into(), "obs".into(), "doc".into()];
+		let mut argument_number = 1;
 	
-		for argument in args.iter() {
-			match argument.as_str() {
+		while argument_number < args.len() {
+			match args[argument_number].as_str() {
 				"-h" | "--help" => print_help(),
-				"-p" | "--path" => print_help(),
+				"-p" | "--path" => {argument_number = argument_number+1;
+									path = args[argument_number].as_str().into();},
 				"-f" | "--flatten" => alt_mode = true,
-				"-e" | "--exception" => print_help(),
+				"-e" | "--exception" => {argument_number = argument_number+1;
+										 exceptions = args[argument_number].as_str().split(',').map(|s| s.to_string()).collect();},
 				_ => print_help()
-			
 			}
+			argument_number = argument_number+1;
 		}
 
-        //let query = args[1].clone();
-        //let filename = args[2].clone();
-
+		println!("The current directory is {}, exceptions are {:?} and flatten mode is set to {} ", path.display(), exceptions, alt_mode );
         Ok(Config { path, alt_mode, exceptions })
     }
 }
