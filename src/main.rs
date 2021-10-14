@@ -23,7 +23,7 @@ fn main()  {
 		}
         //println!("Name: {} , extension: {:?}", path_int.display(), extension.unwrap().to_str())
     }
-	//filesToShuffle.sort();
+	filesToShuffle.sort_by(|a,b| a.path().file_stem().unwrap().to_str().unwrap().parse::<i32>().unwrap().cmp(&b.path().file_stem().unwrap().to_str().unwrap().parse::<i32>().unwrap()));
 	for file in filesToShuffle {
 		let path_int = file.path();
 		let extension = path_int.extension();
