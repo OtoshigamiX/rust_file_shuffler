@@ -1,15 +1,35 @@
 use std::env;
 use std::error::Error;
 use std::process;
+use std::fs;
+use std::ffi::OsStr;
 
-
-fn main() {
+fn main()  {
     let args: Vec<String> = env::args().collect();
 	
 	let config = Config::new(&args).unwrap_or_else(|err| {
         println!("Problem parsing arguments: {}", err);
         process::exit(1);
     });
+	
+	let mut filesToShuffle: Vec<fs::DirEntry> = Vec::new();
+
+    for entry in fs::read_dir(config.path.as_path()).unwrap() {
+		let path = entry.unwrap();
+		let path_int = path.path();
+		let extension = path_int.extension();
+		if extension.is_some() && !config.exceptions.contains(&extension.unwrap().to_str().unwrap().to_lowercase()) {
+			filesToShuffle.push(path);
+		}
+        //println!("Name: {} , extension: {:?}", path_int.display(), extension.unwrap().to_str())
+    }
+	//filesToShuffle.sort();
+	for file in filesToShuffle {
+		let path_int = file.path();
+		let extension = path_int.extension();
+		println!("name: {} , extension: {:?}", path_int.display(), extension.unwrap().to_str())
+	}
+	
 }
 
 fn print_help()
