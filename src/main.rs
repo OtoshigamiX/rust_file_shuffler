@@ -3,8 +3,10 @@ use std::error::Error;
 use std::process;
 use std::fs;
 use std::ffi::OsStr;
+use rand::thread_rng;
+use rand::seq::SliceRandom;
 
-fn main()  {
+fn main() -> std::io::Result<()>  {
     let args: Vec<String> = env::args().collect();
 	
 	let config = Config::new(&args).unwrap_or_else(|err| {
@@ -13,6 +15,7 @@ fn main()  {
     });
 	
 	let mut filesToShuffle: Vec<fs::DirEntry> = Vec::new();
+	let mut fileNames: Vec<String> = Vec::new();
 
     for entry in fs::read_dir(config.path.as_path()).unwrap() {
 		let path = entry.unwrap();
@@ -20,16 +23,39 @@ fn main()  {
 		let extension = path_int.extension();
 		if extension.is_some() && !config.exceptions.contains(&extension.unwrap().to_str().unwrap().to_lowercase()) {
 			filesToShuffle.push(path);
+			fileNames.push(path_int.file_stem().unwrap().to_str().unwrap().to_string())
 		}
         //println!("Name: {} , extension: {:?}", path_int.display(), extension.unwrap().to_str())
     }
-	filesToShuffle.sort_by(|a,b| a.path().file_stem().unwrap().to_str().unwrap().parse::<i32>().unwrap().cmp(&b.path().file_stem().unwrap().to_str().unwrap().parse::<i32>().unwrap()));
-	for file in filesToShuffle {
+	// sort files 
+	//filesToShuffle.sort_by(|a,b| a.path().file_stem().unwrap().to_str().unwrap().parse::<i32>().unwrap().cmp(&b.path().file_stem().unwrap().to_str().unwrap().parse::<i32>().unwrap()));
+	for file in &filesToShuffle {
 		let path_int = file.path();
 		let extension = path_int.extension();
 		println!("name: {} , extension: {:?}", path_int.display(), extension.unwrap().to_str())
 	}
 	
+	for name in &fileNames {
+		println!("file name: {} ", name)
+	}
+	
+	fileNames.shuffle(&mut thread_rng());
+	
+	println!("After shuffle. ");
+	
+	for name in &fileNames {
+		println!("file name: {} ", name)
+	}
+	
+	for iter in filesToShuffle.iter().zip(fileNames.iter()) {
+		
+	}
+	//create vector of positions
+//	let mut positionVector: Vec<i32> = (0..filesToShuffle.len()).collect(); 
+//	for pos in positionVector {
+//		println!("name: {} , extension: {:?}", path_int.display(), extension.unwrap().to_str())
+//	}
+	 Ok(())
 }
 
 fn print_help()
