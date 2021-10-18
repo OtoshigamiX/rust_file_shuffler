@@ -5,6 +5,8 @@ use std::fs;
 use std::ffi::OsStr;
 use rand::thread_rng;
 use rand::seq::SliceRandom;
+use std::io::Write;
+use std::fs::OpenOptions;
 
 fn main() -> std::io::Result<()>  {
     let args: Vec<String> = env::args().collect();
@@ -47,6 +49,13 @@ fn main() -> std::io::Result<()>  {
 		println!("file name: {} ", name)
 	}
 	
+	let mut outputFile = OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open(config.path.to_str().clone().expect("Cannot clone string").to_owned() + "\\list.txt")
+        .expect("Unable to open file");
+	outputFile.write_all(b"test").expect("Unable to write data");
+	outputFile.write_all(b"test2").expect("Unable to write data");
 	for iter in filesToShuffle.iter().zip(fileNames.iter()) {
 		
 	}
