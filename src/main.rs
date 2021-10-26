@@ -54,11 +54,31 @@ fn main() -> std::io::Result<()>  {
         .create(true)
         .open(config.path.to_str().clone().expect("Cannot clone string").to_owned() + "\\list.txt")
         .expect("Unable to open file");
-	outputFile.write_all(b"test").expect("Unable to write data");
-	outputFile.write_all(b"test2").expect("Unable to write data");
+	//outputFile.write_all(b"test").expect("Unable to write data");
+	//outputFile.write_all(b"test2").expect("Unable to write data");
+	let mut newFileNames: Vec<String> = Vec::new();
 	for iter in filesToShuffle.iter().zip(fileNames.iter()) {
+		let (path_to_rename, shuffled_filename) = iter;
+		//outputFile.write_all(b"test2").expect("Unable to write data");
+		//fs::rename
 		
+		let path = path_to_rename.path();
+		outputFile.write_all( format!("{}\t{}\n", path.file_stem().unwrap().to_str().unwrap().to_string(), shuffled_filename).as_bytes() ).expect("Unable to write data");
+		let old_name = path.to_str().unwrap();
+		let tmp_new_name = format!("{}\\{}.{}tmp", config.path.to_str().unwrap(), shuffled_filename, path.extension().unwrap().to_str().unwrap());
+		
+		println!("file name tmp: {} ", tmp_new_name);
+		
+		fs::rename(old_name, &tmp_new_name)?;
+		newFileNames.push(tmp_new_name);
 	}
+	
+	for name in &newFileNames {
+		let nameWithoutTemp: &str = &name[0..name.len() - 3];
+		println!("final name: {} ", nameWithoutTemp);
+		fs::rename(name, nameWithoutTemp)?;
+	}
+	
 	//create vector of positions
 //	let mut positionVector: Vec<i32> = (0..filesToShuffle.len()).collect(); 
 //	for pos in positionVector {
