@@ -2,11 +2,33 @@ use std::env;
 use std::error::Error;
 use std::process;
 use std::fs;
-use std::ffi::OsStr;
 use rand::thread_rng;
 use rand::seq::SliceRandom;
 use std::io::Write;
 use std::fs::OpenOptions;
+use std::error;
+
+
+fn get_files_in_directory(config: & Config) -> Result<(Vec<fs::DirEntry>, Vec<String>),  Box<dyn Error>> {
+	let mut filepaths_to_shuffle: Vec<fs::DirEntry> = Vec::new();
+	let mut filenames_without_extensions: Vec<String> = Vec::new();
+	
+	for entry in fs::read_dir(config.path.as_path())? {
+		let path = entry?;
+		let path_int = path.path();
+		let extension = path_int.extension();
+		if extension.is_some() && !config.exceptions.contains(&extension.ok_or("No extension!")?
+															  .to_str().ok_or("Cannot convert extension to string!")?.to_lowercase()) {
+			filepaths_to_shuffle.push(path);
+			filenames_without_extensions.push(path_int.file_stem().ok_or("Cannot get file stem!")?
+				.to_str().ok_or("Cannot convert filename to string!")?
+				.to_string())
+		}
+    }
+
+	Ok((filepaths_to_shuffle, filenames_without_extensions))
+}
+
 
 fn main() -> std::io::Result<()>  {
     let args: Vec<String> = env::args().collect();
@@ -16,19 +38,9 @@ fn main() -> std::io::Result<()>  {
         process::exit(1);
     });
 	
-	let mut filesToShuffle: Vec<fs::DirEntry> = Vec::new();
-	let mut fileNames: Vec<String> = Vec::new();
+	let (mut filesToShuffle, mut fileNames) = get_files_in_directory(&config).expect("Couldn't get files from directory");
 
-    for entry in fs::read_dir(config.path.as_path()).unwrap() {
-		let path = entry.unwrap();
-		let path_int = path.path();
-		let extension = path_int.extension();
-		if extension.is_some() && !config.exceptions.contains(&extension.unwrap().to_str().unwrap().to_lowercase()) {
-			filesToShuffle.push(path);
-			fileNames.push(path_int.file_stem().unwrap().to_str().unwrap().to_string())
-		}
-        //println!("Name: {} , extension: {:?}", path_int.display(), extension.unwrap().to_str())
-    }
+
 	// sort files 
 	//filesToShuffle.sort_by(|a,b| a.path().file_stem().unwrap().to_str().unwrap().parse::<i32>().unwrap().cmp(&b.path().file_stem().unwrap().to_str().unwrap().parse::<i32>().unwrap()));
 	for file in &filesToShuffle {
