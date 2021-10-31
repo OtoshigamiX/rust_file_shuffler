@@ -6,8 +6,20 @@ use rand::thread_rng;
 use rand::seq::SliceRandom;
 use std::io::Write;
 use std::fs::OpenOptions;
-use std::error;
+use std::path::{Path, PathBuf};
 
+fn get_file_name(path: &Path) -> Option<String> {
+    path.file_stem()
+        .and_then(|stem| stem.to_str())
+        .map(|s| s.to_string())
+}
+
+fn get_extension(path_buf: &PathBuf) -> Option<String> {
+    path_buf
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| ext.to_lowercase())
+}
 
 fn get_files_in_directory(config: & Config) -> Result<(Vec<fs::DirEntry>, Vec<String>),  Box<dyn Error>> {
 	let mut filepaths_to_shuffle: Vec<fs::DirEntry> = Vec::new();
@@ -16,17 +28,53 @@ fn get_files_in_directory(config: & Config) -> Result<(Vec<fs::DirEntry>, Vec<St
 	for entry in fs::read_dir(config.path.as_path())? {
 		let path = entry?;
 		let path_int = path.path();
-		let extension = path_int.extension();
-		if extension.is_some() && !config.exceptions.contains(&extension.ok_or("No extension!")?
-															  .to_str().ok_or("Cannot convert extension to string!")?.to_lowercase()) {
+		let extension = get_extension(&path_int);
+		if extension.is_some() && !config.exceptions.contains(&extension.ok_or("No extension!")?) {
+			let file_name = get_file_name(&path_int)
+                .ok_or_else(|| format!("Could not get file name for {}", path_int.display()))?;
+															  
 			filepaths_to_shuffle.push(path);
-			filenames_without_extensions.push(path_int.file_stem().ok_or("Cannot get file stem!")?
-				.to_str().ok_or("Cannot convert filename to string!")?
-				.to_string())
+			filenames_without_extensions.push(file_name);
 		}
     }
 
 	Ok((filepaths_to_shuffle, filenames_without_extensions))
+}
+
+fn shuffle_files_and_write_output(filepaths_to_shuffle: & Vec<fs::DirEntry>, shuffled_filenames: & Vec<String>, config: & Config) -> Result<Vec<String>,  Box<dyn Error>> {
+	let mut output_file = OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open(config.path.to_str().clone().expect("Cannot clone string").to_owned() + "\\list.txt")
+        .expect("Unable to open file");
+
+	let mut new_filenames: Vec<String> = Vec::new();
+	
+	for iter in filepaths_to_shuffle.iter().zip(shuffled_filenames.iter()) {
+		let (path_to_rename, shuffled_filename) = iter;
+		
+		let path = path_to_rename.path();
+		output_file.write_all( format!("{}\t{}\n", get_file_name(&path).ok_or("Cannot extract filename!")?, shuffled_filename).as_bytes() ).expect("Unable to write data");
+		let old_name = path.to_str().ok_or("Cannot convert old name to string!")?;
+		let tmp_new_name = format!("{}\\{}.{}tmp", config.path.to_str().ok_or("Cannot convert path to str!")?, shuffled_filename, get_extension(&path).ok_or("Cannot extract extension!")?);
+		
+		println!("file name tmp: {} ", tmp_new_name);
+		
+		fs::rename(old_name, &tmp_new_name)?;
+		new_filenames.push(tmp_new_name);
+	}
+
+	Ok(new_filenames)
+}
+
+
+fn remove_temporary_postfix_from_filenames(temporary_filenames: & Vec<String>) -> Result<(),Box<dyn Error>> {
+	for name in temporary_filenames {
+		let name_without_temp: &str = &name[0..name.len() - 3];
+		println!("final name: {} ", name_without_temp);
+		fs::rename(name, name_without_temp)?;
+	}
+	Ok(())
 }
 
 
@@ -39,7 +87,6 @@ fn main() -> std::io::Result<()>  {
     });
 	
 	let (mut filesToShuffle, mut fileNames) = get_files_in_directory(&config).expect("Couldn't get files from directory");
-
 
 	// sort files 
 	//filesToShuffle.sort_by(|a,b| a.path().file_stem().unwrap().to_str().unwrap().parse::<i32>().unwrap().cmp(&b.path().file_stem().unwrap().to_str().unwrap().parse::<i32>().unwrap()));
@@ -61,36 +108,10 @@ fn main() -> std::io::Result<()>  {
 		println!("file name: {} ", name)
 	}
 	
-	let mut outputFile = OpenOptions::new()
-        .append(true)
-        .create(true)
-        .open(config.path.to_str().clone().expect("Cannot clone string").to_owned() + "\\list.txt")
-        .expect("Unable to open file");
-	//outputFile.write_all(b"test").expect("Unable to write data");
-	//outputFile.write_all(b"test2").expect("Unable to write data");
-	let mut newFileNames: Vec<String> = Vec::new();
-	for iter in filesToShuffle.iter().zip(fileNames.iter()) {
-		let (path_to_rename, shuffled_filename) = iter;
-		//outputFile.write_all(b"test2").expect("Unable to write data");
-		//fs::rename
-		
-		let path = path_to_rename.path();
-		outputFile.write_all( format!("{}\t{}\n", path.file_stem().unwrap().to_str().unwrap().to_string(), shuffled_filename).as_bytes() ).expect("Unable to write data");
-		let old_name = path.to_str().unwrap();
-		let tmp_new_name = format!("{}\\{}.{}tmp", config.path.to_str().unwrap(), shuffled_filename, path.extension().unwrap().to_str().unwrap());
-		
-		println!("file name tmp: {} ", tmp_new_name);
-		
-		fs::rename(old_name, &tmp_new_name)?;
-		newFileNames.push(tmp_new_name);
-	}
+
+	let mut new_temporary_filenames: Vec<String> = shuffle_files_and_write_output(&filesToShuffle, &fileNames, &config).expect("Couldn't shuffle the files!");
 	
-	for name in &newFileNames {
-		let nameWithoutTemp: &str = &name[0..name.len() - 3];
-		println!("final name: {} ", nameWithoutTemp);
-		fs::rename(name, nameWithoutTemp)?;
-	}
-	
+	remove_temporary_postfix_from_filenames(& new_temporary_filenames);
 	//create vector of positions
 //	let mut positionVector: Vec<i32> = (0..filesToShuffle.len()).collect(); 
 //	for pos in positionVector {
