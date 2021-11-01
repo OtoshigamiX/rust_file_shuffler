@@ -8,6 +8,14 @@ use std::io::Write;
 use std::fs::OpenOptions;
 use std::path::{Path, PathBuf};
 
+#[derive(Debug)]
+#[derive(PartialEq)]
+enum Mode {
+	Standard,
+	Simple,
+	Flatten,
+}
+
 fn get_file_name(path: &Path) -> Option<String> {
     path.file_stem()
         .and_then(|stem| stem.to_str())
@@ -54,7 +62,12 @@ fn shuffle_files_and_write_output(filepaths_to_shuffle: & Vec<fs::DirEntry>, shu
 		let (path_to_rename, shuffled_filename) = iter;
 		
 		let path = path_to_rename.path();
-		output_file.write_all( format!("{}\t{}\n", get_file_name(&path).ok_or("Cannot extract filename!")?, shuffled_filename).as_bytes() ).expect("Unable to write data");
+		if config.mode == Mode::Simple || config.mode == Mode::Flatten {
+			output_file.write_all( format!("{}\n", shuffled_filename).as_bytes() ).expect("Unable to write data");
+		}
+		else {
+			output_file.write_all( format!("{}\t{}\n", get_file_name(&path).ok_or("Cannot extract filename!")?, shuffled_filename).as_bytes() ).expect("Unable to write data");
+		}
 		let old_name = path.to_str().ok_or("Cannot convert old name to string!")?;
 		let tmp_new_name = format!("{}\\{}.{}tmp", config.path.to_str().ok_or("Cannot convert path to str!")?, shuffled_filename, get_extension(&path).ok_or("Cannot extract extension!")?);
 		
@@ -88,8 +101,11 @@ fn main() -> std::io::Result<()>  {
 	
 	let (mut filesToShuffle, mut fileNames) = get_files_in_directory(&config).expect("Couldn't get files from directory");
 
-	// sort files 
-	//filesToShuffle.sort_by(|a,b| a.path().file_stem().unwrap().to_str().unwrap().parse::<i32>().unwrap().cmp(&b.path().file_stem().unwrap().to_str().unwrap().parse::<i32>().unwrap()));
+	if config.mode == Mode::Simple || config.mode == Mode::Flatten {
+		filesToShuffle.sort_by(|a,b| a.path().file_stem().unwrap().to_str().unwrap().parse::<i32>().unwrap().cmp(&b.path().file_stem().unwrap().to_str().unwrap().parse::<i32>().unwrap()));
+		fileNames.sort_by(|a,b| a.parse::<i32>().unwrap().cmp(&b.parse::<i32>().unwrap()));
+	}
+
 	for file in &filesToShuffle {
 		let path_int = file.path();
 		let extension = path_int.extension();
@@ -100,7 +116,11 @@ fn main() -> std::io::Result<()>  {
 		println!("file name: {} ", name)
 	}
 	
-	fileNames.shuffle(&mut thread_rng());
+	if config.mode == Mode::Flatten {
+		fileNames = (1..(filesToShuffle.len()+1)).map(|i| i.to_string()).collect(); 
+	} else {
+		fileNames.shuffle(&mut thread_rng());
+	}
 	
 	println!("After shuffle. ");
 	
@@ -112,11 +132,6 @@ fn main() -> std::io::Result<()>  {
 	let mut new_temporary_filenames: Vec<String> = shuffle_files_and_write_output(&filesToShuffle, &fileNames, &config).expect("Couldn't shuffle the files!");
 	
 	remove_temporary_postfix_from_filenames(& new_temporary_filenames);
-	//create vector of positions
-//	let mut positionVector: Vec<i32> = (0..filesToShuffle.len()).collect(); 
-//	for pos in positionVector {
-//		println!("name: {} , extension: {:?}", path_int.display(), extension.unwrap().to_str())
-//	}
 	 Ok(())
 }
 
@@ -125,14 +140,15 @@ fn print_help()
 	println!("Available flags: ");
 	println!("-h/--help - displays this message ");
 	println!("-p/--path PATH - sets PATH as path where the script shall be executed. Default path is the script location.");
-	println!("-f/--flatten - enables the flatten mode, which doesnt shuffle, but tries to bring file numbers to be in order.");
+	println!("-f/--flatten - enables flatten mode, which doesnt shuffle, but tries to bring file numbers to be in order. This mode expects your non-excepted files to have only numbers in names.");
+	println!("-s/--simple - enables simple mode, which generates only one column in output file (only post-rename names, line number is the previous filename). This mode expects your non-excepted files to have only numbers in names.");
 	println!("-e/--exceptions EXCEPTIONS - sets which file extensions shall be excepted. Separate exceptions by comma, without spaces e.g xls,doc,txt. Default exceptions: txt,xls,obs,doc");
 }
 
 
 struct Config{
 	path: std::path::PathBuf,
-	alt_mode: bool,
+	mode: Mode,
 	exceptions: Vec<String>
 }
 
@@ -140,24 +156,25 @@ impl Config {
     fn new(args: &[String]) -> Result<Config,  Box<dyn Error>> {
 		let mut path = env::current_dir()?;
 		println!("Test {}", args[0].as_str());
-		let mut alt_mode = false;
+		let mut mode = Mode::Standard;
 		let mut exceptions : Vec<String> = vec!["txt".into(), "xls".into(), "obs".into(), "doc".into()];
 		let mut argument_number = 1;
 	
 		while argument_number < args.len() {
 			match args[argument_number].as_str() {
 				"-h" | "--help" => print_help(),
-				"-p" | "--path" => {argument_number = argument_number+1;
+				"-p" | "--path" => {argument_number += 1;
 									path = args[argument_number].as_str().into();},
-				"-f" | "--flatten" => alt_mode = true,
-				"-e" | "--exception" => {argument_number = argument_number+1;
+				"-f" | "--flatten" => mode = Mode::Flatten,
+				"-s" | "--simple" => mode = Mode::Simple,
+				"-e" | "--exception" => {argument_number += 1;
 										 exceptions = args[argument_number].as_str().split(',').map(|s| s.to_string()).collect();},
 				_ => print_help()
 			}
 			argument_number = argument_number+1;
 		}
 
-		println!("The current directory is {}, exceptions are {:?} and flatten mode is set to {} ", path.display(), exceptions, alt_mode );
-        Ok(Config { path, alt_mode, exceptions })
+		println!("The current directory is {}, exceptions are {:?} and mode is set to {:?} ", path.display(), exceptions, mode );
+        Ok(Config { path, mode, exceptions })
     }
 }
